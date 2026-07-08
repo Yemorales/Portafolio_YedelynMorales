@@ -7,6 +7,7 @@ package TechShop.Yedelyn.service;
 import TechShop.Yedelyn.domain.Producto;
 import TechShop.Yedelyn.repository.ProductoRepository;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -17,18 +18,18 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class ProductoService {
 
-    // El repositorio es final para asegurar la inmutabilidad
     private final ProductoRepository productoRepository;
     private final FirebaseStorageService firebaseStorageService;
 
-    public ProductoService(ProductoRepository productoRepository, FirebaseStorageService firebaseStorageService) {
+    public ProductoService(ProductoRepository productoRepository,
+            FirebaseStorageService firebaseStorageService) {
         this.productoRepository = productoRepository;
         this.firebaseStorageService = firebaseStorageService;
     }
 
     @Transactional(readOnly = true)
     public List<Producto> getProductos(boolean activo) {
-        if (activo) { // Sólo activos...
+        if (activo) {
             return productoRepository.findByActivoTrue();
         }
         return productoRepository.findAll();
@@ -42,7 +43,7 @@ public class ProductoService {
     @Transactional
     public void save(Producto producto, MultipartFile imagenFile) {
         producto = productoRepository.save(producto);
-        if (imagenFile != null && !imagenFile.isEmpty()) { // Si no está vacío...
+        if (!imagenFile.isEmpty()) { //Si no está vacío... pasaron una imagen...            
             try {
                 String rutaImagen = firebaseStorageService.uploadImage(
                         imagenFile, "producto",
@@ -50,21 +51,39 @@ public class ProductoService {
                 producto.setRutaImagen(rutaImagen);
                 productoRepository.save(producto);
             } catch (IOException e) {
-                // Podrías loguear el error para depuración
+
             }
         }
     }
 
     @Transactional
     public void delete(Integer idProducto) {
-        // Verifica si el producto existe antes de intentar eliminarlo
+        // Verifica si la categoría existe antes de intentar eliminarlo
         if (!productoRepository.existsById(idProducto)) {
-            throw new IllegalArgumentException("El producto con ID " + idProducto + " no existe.");
+            // Lanza una excepción para indicar que el usuario no fue encontrado
+            throw new IllegalArgumentException("La categoría con ID " + idProducto + " no existe.");
         }
         try {
             productoRepository.deleteById(idProducto);
         } catch (DataIntegrityViolationException e) {
-            throw new IllegalStateException("No se puede eliminar el producto. Tiene datos asociados.", e);
+            // Lanza una nueva excepción para encapsular el problema de integridad de datos
+            throw new IllegalStateException("No se puede eliminar la producto. Tiene datos asociados.", e);
         }
     }
+
+    @Transactional(readOnly = true)
+    public List<Producto> consultaDerivada(BigDecimal precioInf, BigDecimal precioSup) {
+        return productoRepository.findByPrecioBetweenOrderByPrecioAsc(precioInf, precioSup);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Producto> consultaJPQL(BigDecimal precioInf, BigDecimal precioSup) {
+        return productoRepository.consultaJPQL(precioInf, precioSup);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Producto> consultaSQL(BigDecimal precioInf, BigDecimal precioSup) {
+        return productoRepository.consultaSQL(precioInf, precioSup);
+    }
+
 }
